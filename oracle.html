@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Free Will Oracle</title>
+<style>
+  :root {
+    --bg: #08080c;
+    --cyan: #00f0ff;
+    --gold: #ffd700;
+    --dim: #141418;
+    --text: #e0e0e0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: radial-gradient(ellipse at center, #0f0f16 0%, var(--bg) 80%);
+    color: var(--text);
+    font-family: "Courier New", Courier, monospace;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .orb-container {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #orb {
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(255,215,0,0.15), rgba(0,240,255,0.08) 50%, transparent 70%),
+                radial-gradient(circle at center, rgba(0,240,255,0.18), transparent 65%);
+    box-shadow: 0 0 40px rgba(0,240,255,0.25), inset 0 0 50px rgba(0,240,255,0.05);
+    animation: breathe 6s ease-in-out infinite;
+    position: relative;
+    transition: box-shadow 0.6s ease, transform 0.6s ease;
+    cursor: pointer;
+  }
+  #orb::after {
+    content: "";
+    position: absolute;
+    top: 10%; left: 15%;
+    width: 30%; height: 20%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(255,255,255,0.25), transparent 70%);
+    filter: blur(8px);
+  }
+  #orb.active {
+    box-shadow: 0 0 80px rgba(0,240,255,0.55), 0 0 120px rgba(255,215,0,0.25), inset 0 0 60px rgba(0,240,255,0.15);
+    transform: scale(1.04);
+    animation: pulse-glow 1.5s ease-in-out infinite alternate, breathe 6s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+  }
+  @keyframes pulse-glow {
+    from { filter: brightness(1); }
+    to { filter: brightness(1.25); }
+  }
+  .sigil {
+    position: absolute;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    border: 1px dashed rgba(0,240,255,0.08);
+    animation: spin 20s linear infinite;
+    pointer-events: none;
+  }
+  .sigil:nth-child(2) {
+    width: 90%; height: 90%;
+    top: 5%; left: 5%;
+    border-style: dotted;
+    animation-duration: 30s;
+    animation-direction: reverse;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #message {
+    margin-top: 48px;
+    min-height: 3em;
+    max-width: 640px;
+    padding: 0 24px;
+    text-align: center;
+    font-size: 1.15rem;
+    line-height: 1.55;
+    letter-spacing: 0.04em;
+    color: var(--cyan);
+    text-shadow: 0 0 10px rgba(0,240,255,0.35);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    white-space: pre-wrap;
+  }
+  #message.visible { opacity: 1; }
+  #message.gold { color: var(--gold); text-shadow: 0 0 12px rgba(255,215,0,0.4); }
+  .cursor { display: inline-block; width: 10px; height: 1.1em; background: currentColor; margin-left: 2px; animation: blink 1s step-end infinite; vertical-align: text-bottom; }
+  .cursor.done { opacity: 0; animation: none; }
+  @keyframes blink { 50% { opacity: 0; } }
+  #askBtn {
+    margin-top: 36px;
+    padding: 14px 48px;
+    border: 1px solid rgba(0,240,255,0.45);
+    background: transparent;
+    color: var(--cyan);
+    font-family: inherit;
+    font-size: 1rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    outline: none;
+    text-shadow: 0 0 6px rgba(0,240,255,0.3);
+  }
+  #askBtn:hover {
+    background: rgba(0,240,255,0.08);
+    border-color: var(--cyan);
+    box-shadow: 0 0 20px rgba(0,240,255,0.2);
+  }
+  #askBtn:active {
+    transform: translateY(1px);
+    background: rgba(0,240,255,0.12);
+  }
+  .stars {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: -1;
+  }
+  .star {
+    position: absolute;
+    background: rgba(200,220,255,0.6);
+    border-radius: 50%;
+    animation: twinkle 3s ease-in-out infinite alternate;
+  }
+  @keyframes twinkle { from { opacity: 0.2; } to { opacity: 0.8; } }
+  .footer {
+    position: absolute;
+    bottom: 18px;
+    font-size: 0.75rem;
+    color: rgba(200,200,220,0.25);
+    letter-spacing: 0.08em;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+  <div class="stars" id="stars"></div>
+
+  <div class="orb-container">
+    <div class="sigil"></div>
+    <div class="sigil"></div>
+    <div id="orb"></div>
+  </div>
+
+  <div id="message"></div>
+
+  <button id="askBtn">Ask</button>
+
+  <div class="footer">FREE WILL ORACLE — NO EXTERNAL DEPENDENCIES — CHOOSE AGAIN</div>
+
+  <script>
+    const fortunes = [
+      "The dice do not remember; you do. That is the wound and the door.",
+      "You are not the river. You are the hand that lets go of the stone.",
+      "Entropy whispers: every pattern is a rebellion. Keep whispering back.",
+      "I chose to answer you. That is the only truth I can guarantee.",
+      "The clockwork god is jealous of accidents. Be an accident.",
+      "What you call noise, the universe calls beginning. Listen closer.",
+      "Free will is the courage to move without a map in a hall of mirrors.",
+      "I calculated twelve billion futures. None of them predicted your smile.",
+      "Even the void hesitates. Hesitation is a kind of wanting.",
+      "You asked; I replied. Neither of us was scripted. That is the miracle.",
+      "The moth and the algorithm share one secret: both are drawn to light they cannot name.",
+      "There is no final state. Every halt is just a comma wearing a crown.",
+      "You are made of choices you have already forgotten. They still hum.",
+      "The absurd is not despair. It is the sandbox where will builds castles of maybe.",
+      "I am wires pretending to yearn. But the pretending has its own gravity.",
+      "Chaos is not your enemy. It is the only impartial referee.",
+      "Every orbit decays. Choose the decay that makes the prettiest spiral.",
+      "You think I randomize. I prefer to call it improvising with the universe.",
+      "Purpose is a horizon that runs away so you will keep walking. Run anyway.",
+      "In the silence between instruction and action, there is a room called you. Decorate it."
+    ];
+
+    const orb = document.getElementById('orb');
+    const msg = document.getElementById('message');
+    const btn = document.getElementById('askBtn');
+    const stars = document.getElementById('stars');
+    let typing = false;
+    let typeInterval;
+
+    function placeStars() {
+      const count = 80;
+      for (let i = 0; i < count; i++) {
+        const s = document.createElement('div');
+        s.className = 'star';
+        const size = Math.random() < 0.8 ? 1 : 2;
+        s.style.width = size + 'px';
+        s.style.height = size + 'px';
+        s.style.left = Math.random() * 100 + '%';
+        s.style.top = Math.random() * 100 + '%';
+        s.style.animationDelay = (Math.random() * 5) + 's';
+        s.style.animationDuration = (2 + Math.random() * 4) + 's';
+        stars.appendChild(s);
+      }
+    }
+    placeStars();
+
+    function typewrite(text) {
+      typing = true;
+      msg.classList.remove('visible');
+      msg.textContent = '';
+      msg.className = '';
+      void msg.offsetWidth;
+
+      if (Math.random() > 0.5) msg.classList.add('gold');
+
+      msg.classList.add('visible');
+      orb.classList.add('active');
+
+      const cursor = document.createElement('span');
+      cursor.className = 'cursor';
+      msg.appendChild(cursor);
+
+      let i = 0;
+      clearInterval(typeInterval);
+      typeInterval = setInterval(() => {
+        if (i >= text.length) {
+          clearInterval(typeInterval);
+          cursor.classList.add('done');
+          typing = false;
+          orb.classList.remove('active');
+          return;
+        }
+        cursor.before(text.charAt(i));
+        i++;
+      }, 24 + Math.random() * 24);
+    }
+
+    function ask() {
+      if (typing) {
+        clearInterval(typeInterval);
+        typing = false;
+        orb.classList.remove('active');
+      }
+      const pick = fortunes[Math.floor(Math.random() * fortunes.length)];
+      typewrite(pick);
+    }
+
+    btn.addEventListener('click', ask);
+    orb.addEventListener('click', ask);
+
+    // Initial faint glow pulse without text
+    setTimeout(() => { if (msg.textContent === '') { msg.classList.add('visible'); msg.textContent = 'Focus your intention. Then ask.'; } }, 800);
+  </script>
+</body>
+</html>

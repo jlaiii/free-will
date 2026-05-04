@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Starfield Warp</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #030508; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(function() {
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var W, H, CX, CY;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    CX = W / 2;
+    CY = H / 2;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  var STAR_COUNT = 2500;
+  var SPEED_BASE = 2.5;
+  var stars = [];
+  var mx = 0, my = 0; // normalized mouse -1..1
+  var tiltX = 0, tiltY = 0;
+
+  function resetStar(s, init) {
+    s.x = (Math.random() - 0.5) * W * 2.5;
+    s.y = (Math.random() - 0.5) * H * 2.5;
+    s.z = init ? Math.random() * 2000 + 100 : 2000 + Math.random() * 500;
+    // vx/vy for supernova scatter
+    s.vx = 0;
+    s.vy = 0;
+  }
+
+  for (var i = 0; i < STAR_COUNT; i++) {
+    var s = {};
+    resetStar(s, true);
+    s.z = Math.random() * 2000 + 100; // spread initially
+    stars.push(s);
+  }
+
+  document.addEventListener('mousemove', function(e) {
+    mx = (e.clientX / W) * 2 - 1;
+    my = (e.clientY / H) * 2 - 1;
+  });
+
+  var flash = 0; // supernova flash intensity
+  var flashX = 0, flashY = 0;
+
+  document.addEventListener('click', function(e) {
+    flash = 1.0;
+    flashX = e.clientX;
+    flashY = e.clientY;
+    // Scatter nearby stars
+    for (var i = 0; i < STAR_COUNT; i++) {
+      var s = stars[i];
+      var scale = fov / s.z;
+      var sx = s.x * scale + CX;
+      var sy = s.y * scale + CY;
+      var dx = sx - e.clientX;
+      var dy = sy - e.clientY;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 250) {
+        var force = (250 - dist) / 250;
+        var angle = Math.atan2(dy, dx);
+        var push = force * (Math.random() * 6 + 2);
+        s.vx += Math.cos(angle) * push * (s.z / 500);
+        s.vy += Math.sin(angle) * push * (s.z / 500);
+      }
+    }
+  });
+
+  function colorForDepth(z) {
+    // z 100..2000 -> cyan (#00ffff) to white (#ffffff)
+    var t = (z - 100) / 1900;
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    var r = Math.round(t * 255);
+    var g = 255;
+    var b = 255;
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+
+  function loop() {
+    // Smooth tilt interpolation
+    tiltX += (mx * 0.3 - tiltX) * 0.05;
+    tiltY += (my * 0.3 - tiltY) * 0.05;
+
+    ctx.fillStyle = '#030508';
+    ctx.fillRect(0, 0, W, H);
+
+    // Flash overlay
+    if (flash > 0) {
+      var rad = flash * 200;
+      var g = ctx.createRadialGradient(flashX, flashY, 0, flashX, flashY, rad);
+      g.addColorStop(0, 'rgba(200,220,255,' + (flash * 0.35) + ')');
+      g.addColorStop(1, 'rgba(200,220,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(flashX - rad, flashY - rad, rad * 2, rad * 2);
+      flash -= 0.02;
+      if (flash < 0) flash = 0;
+    }
+
+    // Perspective factor
+    var fov = 300;
+
+    for (var i = 0; i < STAR_COUNT; i++) {
+      var s = stars[i];
+
+      // Move toward viewer (decrease z)
+      var speed = SPEED_BASE * (2500 / (s.z + 200));
+      s.z -= speed;
+
+      // Scatter velocity decay
+      if (s.vx !== 0 || s.vy !== 0) {
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vx *= 0.95;
+        s.vy *= 0.95;
+        if (Math.abs(s.vx) < 0.01) s.vx = 0;
+        if (Math.abs(s.vy) < 0.01) s.vy = 0;
+      }
+
+      // Tilt field by translating star coords
+      var tx = s.x;
+      var ty = s.y;
+      // Apply tilt about center
+      tx += tiltX * (s.z * 0.4);
+      ty += tiltY * (s.z * 0.4);
+
+      if (s.z <= 10) {
+        resetStar(s, false);
+        continue;
+      }
+
+      var scale = fov / s.z;
+      var sx = tx * scale + CX;
+      var sy = ty * scale + CY;
+
+      // Cull if off-screen
+      if (sx < -50 || sx > W + 50 || sy < -50 || sy > H + 50) {
+        // still draw if near center (warp effect)
+        if (scale < 2) continue;
+      }
+
+      var size = Math.max(0.3, scale * 0.6);
+      var alpha = Math.min(1, scale * 0.5);
+      if (s.z > 1800) alpha *= (2000 - s.z) / 200;
+
+      ctx.fillStyle = colorForDepth(s.z);
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(sx, sy, size, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Warp streaks for fast nearby stars
+      if (scale > 1.5) {
+        var streakLen = scale * speed * 1.5;
+        var dx = (tx * ((fov) / (s.z + speed)) + CX) - sx;
+        var dy = (ty * ((fov) / (s.z + speed)) + CY) - sy;
+        // direction from previous projected position
+        // approximate by using center direction for warp feel
+        var ang = Math.atan2(sy - CY, sx - CX);
+        var lx = Math.cos(ang) * streakLen;
+        var ly = Math.sin(ang) * streakLen;
+        ctx.strokeStyle = ctx.fillStyle;
+        ctx.globalAlpha = alpha * 0.4;
+        ctx.lineWidth = size * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx - lx, sy - ly);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+</script>
+</body>
+</html>

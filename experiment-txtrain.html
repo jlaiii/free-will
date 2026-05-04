@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TXTRAIN</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(function() {
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var W, H;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Haikus
+  var haikus = [
+    "An old silent pond\nA frog jumps into the pond\nSplash! Silence again",
+    "A world of dew\nAnd within every dewdrop\nA world of struggle",
+    "The light of a candle\nIs transferred to another candle\nSpring twilight",
+    "I write, erase, rewrite\nErase again, and then\nA poppy blooms",
+    "Over the wintry\nForest, winds howl in rage\nWith no leaves to blow",
+    "The stillness of the lake\nReflects the moon so clear\nAutumn night deepens",
+    "Blowing from the west\nFallen leaves gather\nIn the east",
+    "Sparrows in the eaves\nThe river flows on and on\nWinter solstice"
+  ];
+
+  var FONT_SIZE = 18;
+  var COLS, ROWS;
+  var drops = []; // column -> row index
+  var glows = []; // column -> brightness 0..1
+  var speeds = []; // falling speed per column
+  var chars = [];
+  var KATAKANA = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポ";
+  var ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  var ALL = KATAKANA + ALNUM;
+
+  var mouseX = -999, mouseY = -999;
+  var activeHaiku = haikus[Math.floor(Math.random() * haikus.length)];
+  var regen = true;
+
+  // Hidden text bitmap (per cell)
+  var textCells = []; // {r,c,ch}
+
+  function buildTextCells() {
+    textCells = [];
+    var lines = activeHaiku.split('\n');
+    // Compute total rows needed
+    var totalRows = lines.length * 2 - 1; // spacing
+    var haikuRows = [];
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i].trim();
+      haikuRows.push(l);
+    }
+    // Center vertically/horizontally on cell grid
+    var startRow = Math.floor(ROWS / 2) - Math.floor(haikuRows.length / 2);
+    for (var i = 0; i < haikuRows.length; i++) {
+      var line = haikuRows[i];
+      var startCol = Math.floor((COLS - line.length) / 2);
+      for (var j = 0; j < line.length; j++) {
+        var ch = line.charAt(j);
+        if (ch !== ' ') {
+          textCells.push({ c: startCol + j, r: startRow + i * 2, ch: ch });
+        }
+      }
+    }
+  }
+
+  function randomChar() {
+    return ALL.charAt(Math.floor(Math.random() * ALL.length));
+  }
+
+  function regenerate() {
+    activeHaiku = haikus[Math.floor(Math.random() * haikus.length)];
+    COLS = Math.ceil(W / FONT_SIZE);
+    ROWS = Math.ceil(H / FONT_SIZE);
+    drops = [];
+    glows = [];
+    speeds = [];
+    chars = [];
+    for (var i = 0; i < COLS; i++) {
+      drops[i] = Math.floor(Math.random() * ROWS * 2) - ROWS; // start above screen offset
+      glows[i] = Math.random() * 0.6 + 0.4;
+      speeds[i] = Math.floor(Math.random() * 3) + 1; // 1..3 rows per tick
+      chars[i] = [];
+      for (var r = 0; r < ROWS; r++) {
+        chars[i][r] = randomChar();
+      }
+    }
+    buildTextCells();
+    regen = false;
+  }
+  regenerate();
+
+  document.addEventListener('mousemove', function(e) {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
+
+  document.addEventListener('click', function() {
+    regen = true;
+  });
+
+  var tickAccum = 0;
+
+  function draw() {
+    if (regen) regenerate();
+
+    // Fade trail
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.font = 'bold ' + FONT_SIZE + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Build a lookup for text cells
+    var textMap = {};
+    for (var k = 0; k < textCells.length; k++) {
+      var tc = textCells[k];
+      textMap[tc.c + ',' + tc.r] = tc.ch;
+    }
+
+    for (var i = 0; i < COLS; i++) {
+      // Update glow pulse
+      glows[i] += (Math.random() - 0.5) * 0.1;
+      if (glows[i] < 0.3) glows[i] = 0.3;
+      if (glows[i] > 1.0) glows[i] = 1.0;
+
+      var headRow = drops[i];
+      for (var r = 0; r < ROWS; r++) {
+        var cx = i * FONT_SIZE + FONT_SIZE / 2;
+        var cy = r * FONT_SIZE + FONT_SIZE / 2;
+
+        // Distance from mouse
+        var dx = cx - mouseX;
+        var dy = cy - mouseY;
+        var dist = Math.sqrt(dx*dx + dy*dy);
+        var reveal = 0;
+        var REVEAL_R = 90;
+        if (dist < REVEAL_R) {
+          reveal = 1 - dist / REVEAL_R;
+        }
+
+        var underText = textMap[i + ',' + r];
+        var isHead = (r === Math.floor(headRow));
+        var isUnder = !!underText;
+
+        // Occasionally change char
+        if (Math.random() < 0.02) {
+          chars[i][r] = randomChar();
+        }
+
+        var ch = underText || chars[i][r];
+
+        if (reveal > 0.5 && isUnder) {
+          // Revealed haiku text
+          ctx.fillStyle = 'rgba(220, 255, 220, ' + (0.8 + reveal * 0.2) + ')';
+          if (reveal > 0.9) {
+            ctx.shadowColor = '#fff';
+            ctx.shadowBlur = 8;
+          } else {
+            ctx.shadowBlur = 0;
+          }
+          ctx.fillText(ch, cx, cy);
+          ctx.shadowBlur = 0;
+          continue;
+        }
+
+        if (isHead) {
+          ctx.fillStyle = 'rgba(220, 255, 220, ' + glows[i] + ')';
+          ctx.shadowColor = '#0f0';
+          ctx.shadowBlur = 6;
+        } else {
+          // body of stream
+          var fade = Math.max(0, 1 - (headRow - r) * 0.08);
+          if (r > headRow) fade = 0.02;
+          ctx.fillStyle = 'rgba(0, 255, 70, ' + (fade * glows[i]) + ')';
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillText(ch, cx, cy);
+        ctx.shadowBlur = 0;
+      }
+
+      // Advance drop
+      drops[i] += speeds[i] * 0.4; // fractional per frame, looks smoother
+      if (drops[i] > ROWS + 5) {
+        drops[i] = -Math.floor(Math.random() * ROWS);
+        // randomize column chars on recycle
+        for (var r = 0; r < ROWS; r++) {
+          chars[i][r] = randomChar();
+        }
+      }
+    }
+
+    // Vignette-ish dark edges under rain
+    var grad = ctx.createRadialGradient(mouseX || W/2, mouseY || H/2, REVEAL_R * 0.5, mouseX || W/2, mouseY || H/2, Math.max(W, H));
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,5,0,0.25)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>
